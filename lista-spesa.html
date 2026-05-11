@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lista Spesa">
+<title>Lista della Spesa</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0f1923;
+    --bg2: #162032;
+    --bg3: #1e2d42;
+    --accent: #4ade80;
+    --accent2: #22d3ee;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --text: #f1f5f9;
+    --text2: #94a3b8;
+    --text3: #475569;
+    --border: rgba(255,255,255,0.07);
+    --card: rgba(255,255,255,0.05);
+    --card-hover: rgba(255,255,255,0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; overscroll-behavior: none; }
+  body { background: radial-gradient(ellipse at top left, #1a2940 0%, #0f1923 60%); }
+
+  ::-webkit-scrollbar { width: 3px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 99px; }
+
+  /* LAYOUT */
+  .app { max-width: 480px; margin: 0 auto; padding: 0 0 100px; min-height: 100vh; }
+
+  /* HEADER */
+  .header { padding: 48px 20px 24px; position: relative; overflow: hidden; }
+  .header::before {
+    content: ''; position: absolute; top: -60px; right: -40px;
+    width: 200px; height: 200px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(74,222,128,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .header-label { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 6px; }
+  .header-title { font-family: 'Playfair Display', serif; font-size: 34px; font-weight: 800; line-height: 1.1; color: var(--text); }
+  .header-row { display: flex; align-items: flex-end; justify-content: space-between; }
+  .header-counter { text-align: right; }
+  .counter-num { font-size: 40px; font-weight: 700; color: var(--accent); line-height: 1; }
+  .counter-num span { color: var(--text3); font-size: 22px; }
+  .counter-label { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  /* PROGRESS */
+  .progress-wrap { padding: 0 20px; margin-bottom: 24px; }
+  .progress-bar-bg { height: 5px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.6s cubic-bezier(0.4,0,0.2,1); box-shadow: 0 0 10px rgba(74,222,128,0.4); }
+  .progress-done { text-align: center; font-size: 13px; color: var(--accent); font-weight: 500; margin-top: 8px; opacity: 0; transition: opacity 0.3s; }
+  .progress-done.show { opacity: 1; }
+
+  /* TABS */
+  .tabs { display: flex; gap: 4px; margin: 0 20px 20px; background: rgba(255,255,255,0.04); border-radius: 14px; padding: 4px; border: 1px solid var(--border); }
+  .tab { flex: 1; padding: 9px 0; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; background: transparent; color: var(--text3); transition: all 0.2s; font-family: 'DM Sans', sans-serif; }
+  .tab.active { background: rgba(74,222,128,0.15); color: var(--accent); box-shadow: 0 0 0 1px rgba(74,222,128,0.25); }
+
+  /* CONTENT */
+  .content { padding: 0 20px; }
+
+  /* SEARCH + SORT */
+  .toolbar { display: flex; gap: 8px; margin-bottom: 14px; }
+  .search-input { flex: 1; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--card); color: var(--text); font-size: 14px; outline: none; font-family: 'DM Sans', sans-serif; transition: border 0.2s; }
+  .search-input:focus { border-color: rgba(74,222,128,0.3); }
+  .search-input::placeholder { color: var(--text3); }
+  .sort-select { padding: 10px 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--card); color: var(--text2); font-size: 12px; outline: none; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+
+  /* FILTER PILLS */
+  .pills { display: flex; gap: 7px; margin-bottom: 20px; flex-wrap: wrap; }
+  .pill { padding: 6px 14px; border-radius: 99px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--text3); transition: all 0.2s; }
+  .pill.active { background: rgba(74,222,128,0.12); color: var(--accent); border-color: rgba(74,222,128,0.3); }
+
+  /* CATEGORY GROUP */
+  .cat-group { margin-bottom: 24px; }
+  .cat-label { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; padding-left: 2px; }
+
+  /* ITEM */
+  .item { display: flex; align-items: center; gap: 12px; background: var(--card); border-radius: 14px; padding: 12px 14px; border: 1px solid var(--border); margin-bottom: 6px; transition: all 0.25s cubic-bezier(0.4,0,0.2,1); }
+  .item:hover { background: var(--card-hover); transform: translateX(3px); }
+  .item.checked { opacity: 0.4; }
+  .item.urgent:not(.checked) { border-color: rgba(251,191,36,0.25); background: rgba(251,191,36,0.04); }
+
+  .check-btn { width: 26px; height: 26px; border-radius: 8px; border: none; cursor: pointer; flex-shrink: 0; background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--text); transition: all 0.2s; }
+  .check-btn.done { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #0f172a; font-weight: 700; }
+  .check-btn:hover { transform: scale(1.1); }
+
+  .item-body { flex: 1; min-width: 0; }
+  .item-name { font-size: 15px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: all 0.2s; }
+  .item-name.striked { text-decoration: line-through; color: var(--text3); }
+  .item-sub { font-size: 12px; color: var(--text3); margin-top: 1px; }
+
+  .item-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+  .urgent-btn { font-size: 15px; cursor: pointer; opacity: 0.25; transition: all 0.2s; }
+  .urgent-btn.on { opacity: 1; }
+  .urgent-btn:hover { transform: scale(1.3); opacity: 1; }
+  .del-btn { font-size: 18px; color: var(--danger); cursor: pointer; opacity: 0.3; transition: opacity 0.2s; line-height: 1; }
+  .del-btn:hover { opacity: 1; }
+
+  /* EMPTY STATE */
+  .empty { text-align: center; color: var(--text3); font-size: 15px; margin-top: 60px; line-height: 1.8; }
+  .empty-icon { font-size: 52px; margin-bottom: 12px; }
+  .empty a { color: var(--accent); cursor: pointer; text-decoration: none; }
+
+  /* CLEAR BUTTON */
+  .clear-btn { width: 100%; padding: 13px; margin-top: 10px; border-radius: 12px; border: 1px dashed rgba(248,113,113,0.35); background: rgba(248,113,113,0.05); color: var(--danger); font-size: 14px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; letter-spacing: 0.3px; }
+  .clear-btn:hover { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.5); }
+
+  /* ADD FORM */
+  .form-card { background: var(--card); border-radius: 16px; padding: 18px; border: 1px solid var(--border); margin-bottom: 14px; }
+  .form-label { font-size: 10px; color: var(--text3); font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 10px; }
+  .text-input { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.06); color: var(--text); font-size: 16px; outline: none; font-family: 'DM Sans', sans-serif; transition: border 0.2s; }
+  .text-input:focus { border-color: rgba(74,222,128,0.35); }
+  .text-input::placeholder { color: var(--text3); }
+
+  /* SUGGESTIONS */
+  .sugg-wrap { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+  .sugg-chip { padding: 6px 12px; border-radius: 99px; font-size: 12px; background: rgba(255,255,255,0.06); color: var(--text2); border: 1px solid var(--border); cursor: pointer; transition: all 0.15s; }
+  .sugg-chip:hover { background: rgba(255,255,255,0.12); color: var(--text); }
+
+  /* QTY + UNIT */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .qty-control { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+  .qty-btn { width: 30px; height: 30px; border-radius: 8px; border: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .qty-btn.minus { background: rgba(255,255,255,0.08); color: var(--text); }
+  .qty-btn.plus { background: rgba(74,222,128,0.15); color: var(--accent); }
+  .qty-btn:hover { transform: scale(1.1); }
+  .qty-num { font-size: 24px; font-weight: 700; color: var(--accent); min-width: 32px; text-align: center; }
+
+  /* UNIT CHIPS */
+  .unit-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .unit-chip { padding: 5px 10px; border-radius: 7px; font-size: 11px; font-weight: 700; cursor: pointer; border: 1px solid var(--border); background: rgba(255,255,255,0.05); color: var(--text3); transition: all 0.15s; }
+  .unit-chip.active { background: rgba(74,222,128,0.15); color: var(--accent); border-color: rgba(74,222,128,0.3); }
+
+  /* CATEGORY CHIPS */
+  .cat-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+  .cat-chip { padding: 7px 12px; border-radius: 10px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: rgba(255,255,255,0.04); color: var(--text3); transition: all 0.15s; }
+
+  /* URGENT TOGGLE */
+  .urgent-toggle { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--border); background: var(--card); cursor: pointer; margin-bottom: 18px; transition: all 0.2s; }
+  .urgent-toggle.on { background: rgba(251,191,36,0.07); border-color: rgba(251,191,36,0.3); }
+  .toggle-icon { font-size: 20px; }
+  .toggle-text { flex: 1; }
+  .toggle-title { font-size: 14px; font-weight: 600; color: var(--text2); transition: color 0.2s; }
+  .urgent-toggle.on .toggle-title { color: var(--warn); }
+  .toggle-sub { font-size: 12px; color: var(--text3); }
+  .toggle-switch { width: 44px; height: 24px; border-radius: 99px; background: rgba(255,255,255,0.1); position: relative; transition: background 0.2s; flex-shrink: 0; }
+  .urgent-toggle.on .toggle-switch { background: var(--warn); }
+  .toggle-knob { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 99px; background: #fff; transition: left 0.2s; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+  .urgent-toggle.on .toggle-knob { left: 23px; }
+
+  /* ADD BUTTON */
+  .add-btn { width: 100%; padding: 16px; border-radius: 14px; border: none; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #0f172a; font-size: 16px; font-weight: 700; cursor: pointer; font-family: 'DM Sans', sans-serif; box-shadow: 0 4px 20px rgba(74,222,128,0.25); transition: all 0.2s; letter-spacing: 0.3px; }
+  .add-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(74,222,128,0.4); }
+  .add-btn:active { transform: translateY(0); }
+  .add-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* STATS */
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 22px; }
+  .stat-card { background: var(--card); border-radius: 16px; padding: 16px; border: 1px solid var(--border); }
+  .stat-icon { font-size: 24px; margin-bottom: 6px; }
+  .stat-num { font-size: 30px; font-weight: 700; line-height: 1; }
+  .stat-label { font-size: 12px; color: var(--text3); margin-top: 3px; }
+
+  /* CAT PROGRESS */
+  .cat-progress { background: var(--card); border-radius: 14px; padding: 14px 16px; margin-bottom: 8px; border: 1px solid var(--border); }
+  .cat-progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .cat-progress-label { font-size: 13px; font-weight: 600; color: var(--text); }
+  .cat-progress-count { font-size: 12px; color: var(--text3); }
+  .cat-progress-bar { height: 4px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden; }
+  .cat-progress-fill { height: 100%; border-radius: 99px; transition: width 0.4s; }
+
+  /* URGENT LIST */
+  .urgent-item { background: rgba(251,191,36,0.07); border-radius: 12px; padding: 12px 14px; margin-bottom: 6px; border: 1px solid rgba(251,191,36,0.2); display: flex; justify-content: space-between; align-items: center; }
+  .urgent-item-name { font-size: 14px; font-weight: 500; color: #fcd34d; }
+  .urgent-item-qty { font-size: 12px; color: #92400e; }
+
+  /* LOADING */
+  .loading { text-align: center; padding: 40px 20px; color: var(--text3); }
+  .spinner { display: inline-block; width: 28px; height: 28px; border: 3px solid rgba(74,222,128,0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; margin-bottom: 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px); background: #1e2d42; border: 1px solid rgba(74,222,128,0.3); color: var(--text); padding: 10px 20px; border-radius: 99px; font-size: 13px; font-weight: 500; opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap; z-index: 999; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* SECTION TITLE */
+  .section-title { font-size: 11px; color: var(--text3); letter-spacing: 1.5px; text-transform: uppercase; font-weight: 700; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-label">🛒 La Tua Lista</div>
+    <div class="header-row">
+      <h1 class="header-title">Spesa<br>Intelligente</h1>
+      <div class="header-counter">
+        <div class="counter-num" id="counterDone">0<span id="counterTotal">/0</span></div>
+        <div class="counter-label">completati</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="progress-wrap">
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
+    </div>
+    <div class="progress-done" id="progressDone">🎉 Hai preso tutto! Ottimo lavoro!</div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('lista')">📋 Lista</button>
+    <button class="tab" onclick="switchTab('aggiungi')">➕ Aggiungi</button>
+    <button class="tab" onclick="switchTab('riepilogo')">📊 Riepilogo</button>
+  </div>
+
+  <!-- TAB: LISTA -->
+  <div id="tab-lista" class="content">
+    <div class="toolbar">
+      <input class="search-input" type="text" placeholder="🔍 Cerca un prodotto..." id="searchInput" oninput="renderList()">
+      <select class="sort-select" id="sortSelect" onchange="renderList()">
+        <option value="default">Ordine</option>
+        <option value="categoria">Categoria</option>
+        <option value="urgenza">Urgenza</option>
+        <option value="nome">A–Z</option>
+      </select>
+    </div>
+    <div class="pills">
+      <div class="pill active" onclick="setFilter('all', this)">Tutti</div>
+      <div class="pill" onclick="setFilter('da_prendere', this)">Da prendere</div>
+      <div class="pill" onclick="setFilter('presi', this)">Presi ✓</div>
+    </div>
+    <div id="listContainer">
+      <div class="loading"><div class="spinner"></div><br>Caricamento...</div>
+    </div>
+    <button class="clear-btn" id="clearBtn" style="display:none" onclick="clearChecked()">🗑️ Rimuovi prodotti presi (<span id="clearCount">0</span>)</button>
+  </div>
+
+  <!-- TAB: AGGIUNGI -->
+  <div id="tab-aggiungi" class="content" style="display:none">
+    <div class="form-card">
+      <div class="form-label">Nome prodotto</div>
+      <input class="text-input" type="text" id="nameInput" placeholder="Es. Parmigiano Reggiano..." oninput="updateSuggestions()" onkeydown="if(event.key==='Enter') addItem()">
+      <div class="sugg-wrap" id="suggestions"></div>
+    </div>
+
+    <div class="two-col">
+      <div class="form-card" style="margin-bottom:0">
+        <div class="form-label">Quantità</div>
+        <div class="qty-control">
+          <button class="qty-btn minus" onclick="changeQty(-1)">−</button>
+          <div class="qty-num" id="qtyDisplay">1</div>
+          <button class="qty-btn plus" onclick="changeQty(1)">+</button>
+        </div>
+      </div>
+      <div class="form-card" style="margin-bottom:0">
+        <div class="form-label">Unità</div>
+        <div class="unit-chips" id="unitChips"></div>
+      </div>
+    </div>
+    <div style="height:14px"></div>
+
+    <div class="form-card">
+      <div class="form-label">Categoria</div>
+      <div class="cat-chips" id="catChips"></div>
+    </div>
+
+    <div class="urgent-toggle" id="urgentToggle" onclick="toggleUrgentForm()">
+      <div class="toggle-icon">⚡</div>
+      <div class="toggle-text">
+        <div class="toggle-title">Urgente</div>
+        <div class="toggle-sub">Questo prodotto è prioritario</div>
+      </div>
+      <div class="toggle-switch"><div class="toggle-knob"></div></div>
+    </div>
+
+    <button class="add-btn" onclick="addItem()">+ Aggiungi alla lista</button>
+  </div>
+
+  <!-- TAB: RIEPILOGO -->
+  <div id="tab-riepilogo" class="content" style="display:none">
+    <div class="stats-grid" id="statsGrid"></div>
+    <div class="section-title">Prodotti per categoria</div>
+    <div id="catProgressList"></div>
+    <div id="urgentSection" style="display:none">
+      <div class="section-title" style="margin-top:20px">⚡ Prodotti urgenti</div>
+      <div id="urgentList"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── SUPABASE ─────────────────────────────────────────────
+const SUPABASE_URL = 'https://lfeazsovkvxzsvtskaca.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmZWF6c292a3Z4enN2dHNrYWNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MTIzOTgsImV4cCI6MjA5NDA4ODM5OH0.EBchH0qgG9R8efguM-VQuzP4-ibbP5c48etL3Ci1XsQ';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── DATI ─────────────────────────────────────────────────
+const CATEGORIES = [
+  { id: 'frutta',    label: '🍎 Frutta & Verdura', color: '#4ade80' },
+  { id: 'latticini', label: '🥛 Latticini',        color: '#93c5fd' },
+  { id: 'carne',     label: '🥩 Carne & Pesce',    color: '#fca5a5' },
+  { id: 'pane',      label: '🍞 Pane & Pasta',      color: '#fcd34d' },
+  { id: 'bevande',   label: '🧃 Bevande',           color: '#c4b5fd' },
+  { id: 'pulizia',   label: '🧴 Pulizia & Cura',   color: '#6ee7b7' },
+  { id: 'surgelati', label: '❄️ Surgelati',         color: '#bfdbfe' },
+  { id: 'altro',     label: '🛒 Altro',             color: '#d1d5db' },
+];
+const UNITS = ['pz','kg','g','l','ml','conf','bot','bst'];
+const SUGGESTIONS = {
+  frutta:    ['Mele','Banane','Arance','Pomodori','Spinaci','Zucchine','Cipolle','Aglio','Limoni','Pere','Fragole','Insalata'],
+  latticini: ['Latte','Yogurt','Burro','Parmigiano','Mozzarella','Uova','Ricotta','Panna fresca'],
+  carne:     ['Petto di pollo','Macinato','Salmone','Tonno','Prosciutto','Bresaola','Merluzzo'],
+  pane:      ['Pane di casa','Pasta','Riso','Farina','Biscotti','Crackers','Grissini','Pane integrale'],
+  bevande:   ['Acqua naturale','Acqua frizzante','Succo d\'arancia','Caffè','Tè','Vino rosso','Birra'],
+  pulizia:   ['Detersivo piatti','Ammorbidente','Carta igienica','Sapone mani','Shampoo'],
+  surgelati: ['Piselli','Spinaci surgelati','Pizza surgelata','Bastoncini di pesce'],
+  altro:     ['Sale','Pepe','Olio d\'oliva','Aceto','Passata di pomodoro','Conserve'],
+};
+
+// ── STATE ────────────────────────────────────────────────
+let items = [];
+let activeTab = 'lista';
+let activeFilter = 'all';
+let formQty = 1;
+let formUnit = 'pz';
+let formCategory = 'altro';
+let formUrgent = false;
+
+// ── INIT ─────────────────────────────────────────────────
+async function init() {
+  await loadItems();
+  buildFormUI();
+  setupRealtime();
+}
+
+async function loadItems() {
+  const { data, error } = await db.from('lista_spesa').select('*').order('created_at', { ascending: true });
+  if (error) { showToast('❌ Errore caricamento'); return; }
+  items = data || [];
+  renderAll();
+}
+
+function setupRealtime() {
+  db.channel('lista_spesa_changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'lista_spesa' }, () => {
+      loadItems();
+    })
+    .subscribe();
+}
+
+// ── RENDER ───────────────────────────────────────────────
+function renderAll() {
+  renderList();
+  renderSummary();
+  updateHeader();
+}
+
+function updateHeader() {
+  const total = items.length;
+  const done = items.filter(i => i.checked).length;
+  const pct = total === 0 ? 0 : (done / total) * 100;
+  document.getElementById('counterDone').childNodes[0].textContent = done;
+  document.getElementById('counterTotal').textContent = '/' + total;
+  document.getElementById('progressFill').style.width = pct + '%';
+  const doneEl = document.getElementById('progressDone');
+  doneEl.classList.toggle('show', total > 0 && done === total);
+}
+
+function renderList() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const sort   = document.getElementById('sortSelect').value;
+
+  let filtered = items.filter(i => {
+    if (activeFilter === 'da_prendere') return !i.checked;
+    if (activeFilter === 'presi') return i.checked;
+    return true;
+  }).filter(i => i.name.toLowerCase().includes(search));
+
+  if (sort === 'categoria') filtered.sort((a,b) => a.category.localeCompare(b.category));
+  else if (sort === 'urgenza') filtered.sort((a,b) => b.urgent - a.urgent);
+  else if (sort === 'nome') filtered.sort((a,b) => a.name.localeCompare(b.name));
+
+  const done = items.filter(i => i.checked).length;
+  const clearBtn = document.getElementById('clearBtn');
+  document.getElementById('clearCount').textContent = done;
+  clearBtn.style.display = done > 0 ? 'block' : 'none';
+
+  const container = document.getElementById('listContainer');
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<div class="empty">
+      <div class="empty-icon">🛒</div>
+      Nessun prodotto trovato.<br>
+      <a onclick="switchTab('aggiungi')">Aggiungi qualcosa →</a>
+    </div>`;
+    return;
+  }
+
+  // Raggruppa per categoria
+  const byCat = {};
+  filtered.forEach(item => {
+    if (!byCat[item.category]) byCat[item.category] = [];
+    byCat[item.category].push(item);
+  });
+
+  let html = '';
+  CATEGORIES.forEach(cat => {
+    const catItems = byCat[cat.id];
+    if (!catItems) return;
+    html += `<div class="cat-group">
+      <div class="cat-label" style="color:${cat.color}">${cat.label}</div>`;
+    catItems.forEach(item => {
+      html += `
+      <div class="item ${item.checked ? 'checked' : ''} ${item.urgent && !item.checked ? 'urgent' : ''}" id="item-${item.id}">
+        <button class="check-btn ${item.checked ? 'done' : ''}" onclick="toggleItem('${item.id}')">
+          ${item.checked ? '✓' : ''}
+        </button>
+        <div class="item-body">
+          <div class="item-name ${item.checked ? 'striked' : ''}">
+            ${item.urgent && !item.checked ? '<span style="color:#fbbf24;margin-right:4px">⚡</span>' : ''}
+            ${escHtml(item.name)}
+          </div>
+          <div class="item-sub">${item.qty} ${item.unit}</div>
+        </div>
+        <div class="item-actions">
+          <span class="urgent-btn ${item.urgent ? 'on' : ''}" onclick="toggleUrgent('${item.id}')" title="Urgente">⚡</span>
+          <span class="del-btn" onclick="deleteItem('${item.id}')">×</span>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+}
+
+function renderSummary() {
+  const total = items.length;
+  const done  = items.filter(i => i.checked).length;
+  const urgentPending = items.filter(i => i.urgent && !i.checked);
+
+  document.getElementById('statsGrid').innerHTML = [
+    { label: 'Totale prodotti', value: total, icon: '🛒', color: '#4ade80' },
+    { label: 'Da prendere',    value: total - done, icon: '📋', color: '#fbbf24' },
+    { label: 'Già presi',      value: done, icon: '✅', color: '#22d3ee' },
+    { label: 'Urgenti',        value: urgentPending.length, icon: '⚡', color: '#f87171' },
+  ].map(s => `
+    <div class="stat-card">
+      <div class="stat-icon">${s.icon}</div>
+      <div class="stat-num" style="color:${s.color}">${s.value}</div>
+      <div class="stat-label">${s.label}</div>
+    </div>`).join('');
+
+  let catHtml = '';
+  CATEGORIES.forEach(cat => {
+    const catItems = items.filter(i => i.category === cat.id);
+    if (!catItems.length) return;
+    const catDone = catItems.filter(i => i.checked).length;
+    const pct = Math.round((catDone / catItems.length) * 100);
+    catHtml += `
+    <div class="cat-progress">
+      <div class="cat-progress-header">
+        <span class="cat-progress-label">${cat.label}</span>
+        <span class="cat-progress-count">${catDone}/${catItems.length}</span>
+      </div>
+      <div class="cat-progress-bar">
+        <div class="cat-progress-fill" style="width:${pct}%;background:${cat.color}"></div>
+      </div>
+    </div>`;
+  });
+  document.getElementById('catProgressList').innerHTML = catHtml || '<div style="color:var(--text3);font-size:14px">Nessun prodotto nella lista.</div>';
+
+  const urgentSection = document.getElementById('urgentSection');
+  if (urgentPending.length > 0) {
+    urgentSection.style.display = 'block';
+    document.getElementById('urgentList').innerHTML = urgentPending.map(item => `
+      <div class="urgent-item">
+        <span class="urgent-item-name">${escHtml(item.name)}</span>
+        <span class="urgent-item-qty">${item.qty} ${item.unit}</span>
+      </div>`).join('');
+  } else {
+    urgentSection.style.display = 'none';
+  }
+}
+
+// ── FORM UI ───────────────────────────────────────────────
+function buildFormUI() {
+  // Units
+  document.getElementById('unitChips').innerHTML = UNITS.map(u => `
+    <div class="unit-chip ${u === formUnit ? 'active' : ''}" onclick="setUnit('${u}')" id="unit-${u}">${u}</div>`).join('');
+
+  // Categories
+  document.getElementById('catChips').innerHTML = CATEGORIES.map(c => `
+    <div class="cat-chip ${c.id === formCategory ? 'active' : ''}" 
+         onclick="setCategory('${c.id}')" id="cat-${c.id}"
+         style="${c.id === formCategory ? `background:${c.color}22;color:${c.color};border-color:${c.color}55` : ''}">
+      ${c.label}
+    </div>`).join('');
+
+  updateSuggestions();
+}
+
+function updateSuggestions() {
+  const val = document.getElementById('nameInput').value.toLowerCase();
+  const pool = val.length > 0
+    ? Object.values(SUGGESTIONS).flat().filter(s => s.toLowerCase().includes(val)).slice(0, 6)
+    : (SUGGESTIONS[formCategory] || []).slice(0, 6);
+  document.getElementById('suggestions').innerHTML = pool.map(s =>
+    `<div class="sugg-chip" onclick="pickSuggestion('${escHtml(s)}')">${s}</div>`).join('');
+}
+
+function pickSuggestion(name) {
+  document.getElementById('nameInput').value = name;
+  updateSuggestions();
+}
+
+function changeQty(delta) {
+  formQty = Math.max(1, formQty + delta);
+  document.getElementById('qtyDisplay').textContent = formQty;
+}
+
+function setUnit(u) {
+  formUnit = u;
+  document.querySelectorAll('.unit-chip').forEach(el => el.classList.remove('active'));
+  document.getElementById('unit-' + u).classList.add('active');
+}
+
+function setCategory(id) {
+  formCategory = id;
+  document.querySelectorAll('.cat-chip').forEach(el => {
+    el.classList.remove('active');
+    el.style.background = '';
+    el.style.color = '';
+    el.style.borderColor = '';
+  });
+  const cat = CATEGORIES.find(c => c.id === id);
+  const el = document.getElementById('cat-' + id);
+  el.classList.add('active');
+  el.style.background = cat.color + '22';
+  el.style.color = cat.color;
+  el.style.borderColor = cat.color + '55';
+  updateSuggestions();
+}
+
+function toggleUrgentForm() {
+  formUrgent = !formUrgent;
+  document.getElementById('urgentToggle').classList.toggle('on', formUrgent);
+}
+
+// ── CRUD ─────────────────────────────────────────────────
+async function addItem() {
+  const name = document.getElementById('nameInput').value.trim();
+  if (!name) { showToast('⚠️ Inserisci un nome'); return; }
+
+  const btn = document.querySelector('.add-btn');
+  btn.disabled = true;
+
+  const { error } = await db.from('lista_spesa').insert({
+    name, category: formCategory, qty: formQty, unit: formUnit,
+    checked: false, urgent: formUrgent,
+  });
+
+  btn.disabled = false;
+
+  if (error) { showToast('❌ Errore salvataggio'); return; }
+
+  document.getElementById('nameInput').value = '';
+  formQty = 1; formUrgent = false;
+  document.getElementById('qtyDisplay').textContent = '1';
+  document.getElementById('urgentToggle').classList.remove('on');
+  updateSuggestions();
+  showToast('✅ ' + name + ' aggiunto!');
+  switchTab('lista');
+}
+
+async function toggleItem(id) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  const { error } = await db.from('lista_spesa').update({ checked: !item.checked }).eq('id', id);
+  if (!error) { item.checked = !item.checked; renderAll(); }
+}
+
+async function toggleUrgent(id) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  const { error } = await db.from('lista_spesa').update({ urgent: !item.urgent }).eq('id', id);
+  if (!error) { item.urgent = !item.urgent; renderAll(); }
+}
+
+async function deleteItem(id) {
+  const item = items.find(i => i.id === id);
+  const { error } = await db.from('lista_spesa').delete().eq('id', id);
+  if (!error) {
+    items = items.filter(i => i.id !== id);
+    renderAll();
+    showToast('🗑️ Rimosso');
+  }
+}
+
+async function clearChecked() {
+  const ids = items.filter(i => i.checked).map(i => i.id);
+  if (!ids.length) return;
+  const { error } = await db.from('lista_spesa').delete().in('id', ids);
+  if (!error) {
+    items = items.filter(i => !i.checked);
+    renderAll();
+    showToast('🗑️ Prodotti presi rimossi');
+  }
+}
+
+// ── UI HELPERS ────────────────────────────────────────────
+function switchTab(tab) {
+  activeTab = tab;
+  ['lista','aggiungi','riepilogo'].forEach(t => {
+    document.getElementById('tab-' + t).style.display = t === tab ? 'block' : 'none';
+    document.querySelectorAll('.tab')[['lista','aggiungi','riepilogo'].indexOf(t)].classList.toggle('active', t === tab);
+  });
+  if (tab === 'riepilogo') renderSummary();
+  if (tab === 'aggiungi') setTimeout(() => document.getElementById('nameInput').focus(), 100);
+}
+
+function setFilter(val, el) {
+  activeFilter = val;
+  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  renderList();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── START ─────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
