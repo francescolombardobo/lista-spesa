@@ -358,11 +358,16 @@ async function loadItems() {
 }
 
 function setupRealtime() {
-  db.channel('lista_spesa_changes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'lista_spesa' }, () => {
-      loadItems();
-    })
-    .subscribe();
+  try {
+    db.channel('lista_spesa_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lista_spesa' }, () => {
+        loadItems();
+      })
+      .subscribe();
+  } catch(e) {
+    // fallback: polling ogni 5 secondi
+    setInterval(loadItems, 5000);
+  }
 }
 
 // ── RENDER ───────────────────────────────────────────────
@@ -587,6 +592,7 @@ async function addItem() {
   document.getElementById('urgentToggle').classList.remove('on');
   updateSuggestions();
   showToast('✅ ' + name + ' aggiunto!');
+  await loadItems();
   switchTab('lista');
 }
 
@@ -594,22 +600,20 @@ async function toggleItem(id) {
   const item = items.find(i => i.id === id);
   if (!item) return;
   const { error } = await db.from('lista_spesa').update({ checked: !item.checked }).eq('id', id);
-  if (!error) { item.checked = !item.checked; renderAll(); }
+  if (!error) { await loadItems(); }
 }
 
 async function toggleUrgent(id) {
   const item = items.find(i => i.id === id);
   if (!item) return;
   const { error } = await db.from('lista_spesa').update({ urgent: !item.urgent }).eq('id', id);
-  if (!error) { item.urgent = !item.urgent; renderAll(); }
+  if (!error) { await loadItems(); }
 }
 
 async function deleteItem(id) {
-  const item = items.find(i => i.id === id);
   const { error } = await db.from('lista_spesa').delete().eq('id', id);
   if (!error) {
-    items = items.filter(i => i.id !== id);
-    renderAll();
+    await loadItems();
     showToast('🗑️ Rimosso');
   }
 }
@@ -619,8 +623,7 @@ async function clearChecked() {
   if (!ids.length) return;
   const { error } = await db.from('lista_spesa').delete().in('id', ids);
   if (!error) {
-    items = items.filter(i => !i.checked);
-    renderAll();
+    await loadItems();
     showToast('🗑️ Prodotti presi rimossi');
   }
 }
